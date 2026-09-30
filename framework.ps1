@@ -14,23 +14,32 @@ if ($NodeMajor -lt 24) {
   return
 }
 
-$Token = Read-Host 'Token de acesso'
-$Project = Read-Host 'Pasta do projeto'
-if (-not $Token -or -not $Project) {
-  Write-Host 'Token e pasta do projeto são obrigatórios.'
-  return
+$Npmrc = Join-Path $HOME '.npmrc'
+$HasToken = (Test-Path $Npmrc) -and (Select-String -Path $Npmrc -Pattern "//$Registry/:_authToken=" -SimpleMatch -Quiet)
+
+if (-not $HasToken) {
+  $Secure = Read-Host 'Token de acesso da ExpertCustom' -AsSecureString
+  $Token = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure))
+  if (-not $Token) {
+    Write-Host 'Sem o token não dá para baixar o framework.'
+    return
+  }
+  $Lines = @()
+  if (Test-Path $Npmrc) {
+    $Lines = Get-Content $Npmrc | Where-Object {
+      -not $_.StartsWith('@expert-custom:registry=') -and -not $_.StartsWith("//$Registry/:_authToken=")
+    }
+  }
+  $Lines += "@expert-custom:registry=https://$Registry"
+  $Lines += "//$Registry/:_authToken=$Token"
+  Set-Content -Path $Npmrc -Value $Lines
+  Write-Host 'Acesso aos pacotes da ExpertCustom configurado.'
 }
 
-$Npmrc = Join-Path $HOME '.npmrc'
-$Lines = @()
-if (Test-Path $Npmrc) {
-  $Lines = Get-Content $Npmrc | Where-Object {
-    -not $_.StartsWith('@expert-custom:registry=') -and -not $_.StartsWith("//$Registry/:_authToken=")
-  }
+$Project = Read-Host 'Nome da pasta do projeto'
+if (-not $Project) {
+  Write-Host 'Informe o nome da pasta.'
+  return
 }
-$Lines += "@expert-custom:registry=https://$Registry"
-$Lines += "//$Registry/:_authToken=$Token"
-Set-Content -Path $Npmrc -Value $Lines
-Write-Host 'Acesso aos pacotes da ExpertCustom configurado.'
 
 npm exec --yes --package=$CreateApp -- create-app $Project
