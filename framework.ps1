@@ -130,7 +130,31 @@ if ($Language -eq 'java') {
   if (-not $Project) { Write-Host 'Informe o nome da pasta.'; return }
   $version = if ($env:EXPERT_VERSION) { $env:EXPERT_VERSION } else { Get-LatestVersion }
   Write-Host "Criando o projeto `"$Project`" com o framework Java $version..."
-  mvn -q "br.com.expertcustom.fw:expert-maven-plugin:$version`:create" "-Dname=$Project"
+  # Ainda não existe projeto que diga ao Maven onde fica o plugin do framework. Este pom
+  # temporário só faz isso; o projeto é criado na pasta atual, não na dele.
+  $boot = Join-Path ([IO.Path]::GetTempPath()) "expert-instalador-$PID"
+  New-Item -ItemType Directory -Force -Path $boot | Out-Null
+  $pom = @"
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>br.com.expertcustom</groupId>
+  <artifactId>instalador</artifactId>
+  <version>1</version>
+  <packaging>pom</packaging>
+  <pluginRepositories>
+    <pluginRepository>
+      <id>expertcustom</id>
+      <url>$MavenUrl</url>
+    </pluginRepository>
+  </pluginRepositories>
+</project>
+"@
+  Set-Content -Path (Join-Path $boot 'pom.xml') -Value $pom
+  try {
+    mvn -q -f (Join-Path $boot 'pom.xml') "br.com.expertcustom.fw:expert-maven-plugin:$version`:create" "-Dname=$Project"
+  } finally {
+    Remove-Item -Recurse -Force $boot
+  }
   return
 }
 
