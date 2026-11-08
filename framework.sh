@@ -121,10 +121,10 @@ configure_maven() {
   echo "Acesso aos pacotes Maven da ExpertCustom configurado."
 }
 
-# A última versão publicada, lida do GitHub Packages.
+# A última versão publicada, lida do GitHub Packages (ele informa só o <latest>, não o <release>).
 latest_version() {
   curl -fsSL -u "$USERNAME:$TOKEN" "$MAVEN_URL/br/com/expertcustom/fw/api/maven-metadata.xml" 2>/dev/null \
-    | sed -n 's:.*<release>\(.*\)</release>.*:\1:p' | head -1
+    | sed -n 's:.*<latest>\([^<]*\)</latest>.*:\1:p' | head -1
 }
 
 # ---- Java ------------------------------------------------------------------------------
@@ -150,7 +150,26 @@ if [ "$LANGUAGE" = "java" ]; then
   VERSION="${EXPERT_VERSION:-$(latest_version)}"
   if [ -z "$VERSION" ]; then echo "Não consegui ler o framework no GitHub. Confira se o token tem a permissão read:packages." >&2; exit 1; fi
   echo "Criando o projeto \"$PROJECT\" com o framework Java $VERSION..."
-  mvn -q "br.com.expertcustom.fw:expert-maven-plugin:$VERSION:create" -Dname="$PROJECT"
+  # Ainda não existe projeto que diga ao Maven onde fica o plugin do framework. Este pom
+  # temporário só faz isso; o projeto é criado na pasta atual, não na dele.
+  BOOT=$(mktemp -d)
+  trap 'rm -rf "$BOOT"' EXIT
+  cat > "$BOOT/pom.xml" <<EOF
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>br.com.expertcustom</groupId>
+  <artifactId>instalador</artifactId>
+  <version>1</version>
+  <packaging>pom</packaging>
+  <pluginRepositories>
+    <pluginRepository>
+      <id>expertcustom</id>
+      <url>$MAVEN_URL</url>
+    </pluginRepository>
+  </pluginRepositories>
+</project>
+EOF
+  mvn -q -f "$BOOT/pom.xml" "br.com.expertcustom.fw:expert-maven-plugin:$VERSION:create" -Dname="$PROJECT"
   exit 0
 fi
 

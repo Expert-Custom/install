@@ -108,7 +108,7 @@ function Get-LatestVersion {
   $pair = "$($script:Username):$($script:Token)"
   $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair))
   $xml = Invoke-RestMethod -Uri "$MavenUrl/br/com/expertcustom/fw/api/maven-metadata.xml" -Headers @{ Authorization = "Basic $auth" }
-  return $xml.metadata.versioning.release
+  return $xml.metadata.versioning.latest   # o GitHub Packages informa só o <latest>, não o <release>
 }
 
 if (-not $Language) {
