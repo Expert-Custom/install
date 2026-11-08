@@ -4,13 +4,16 @@ set -e
 # Instalador do framework ExpertCustom. Cria um projeto novo em TypeScript ou em Java.
 #   curl ... | sh                # pergunta tudo
 #   curl ... | sh -s -- --java   # já escolhe Java
+#   curl ... | sh -s -- --java --ia nome   # Java, com a IA (Aurora), na pasta "nome"
 
 LANGUAGE=""
 PROJECT=""
+AI=""
 for arg in "$@"; do
   case "$arg" in
     --ts|--typescript) LANGUAGE="ts" ;;
     --java) LANGUAGE="java" ;;
+    --ia) AI="sim" ;;
     --*) ;;
     *) [ -z "$PROJECT" ] && PROJECT="$arg" ;;
   esac
@@ -147,6 +150,15 @@ if [ "$LANGUAGE" = "java" ]; then
   configure_npm   # as telas vêm do create-app (npm)
   [ -z "$PROJECT" ] && PROJECT=$(ask "Nome da pasta do projeto: ")
   if [ -z "$PROJECT" ]; then echo "Informe o nome da pasta." >&2; exit 1; fi
+  # A mesma pergunta que o create-app faz no TypeScript.
+  if [ -z "$AI" ]; then
+    case "$(ask 'Ligar o assistente de IA (Aurora)? (s/N): ')" in
+      s|S|sim|Sim|SIM) AI="sim" ;;
+      *) AI="nao" ;;
+    esac
+  fi
+  AI_OPTION="-Dia=false"
+  if [ "$AI" = "sim" ]; then AI_OPTION="-Dia=true"; fi
   VERSION="${EXPERT_VERSION:-$(latest_version)}"
   if [ -z "$VERSION" ]; then echo "Não consegui ler o framework no GitHub. Confira se o token tem a permissão read:packages." >&2; exit 1; fi
   echo "Criando o projeto \"$PROJECT\" com o framework Java $VERSION..."
@@ -169,7 +181,7 @@ if [ "$LANGUAGE" = "java" ]; then
   </pluginRepositories>
 </project>
 EOF
-  mvn -q -f "$BOOT/pom.xml" "br.com.expertcustom.fw:expert-maven-plugin:$VERSION:create" -Dname="$PROJECT"
+  mvn -q -f "$BOOT/pom.xml" "br.com.expertcustom.fw:expert-maven-plugin:$VERSION:create" -Dname="$PROJECT" "$AI_OPTION"
   exit 0
 fi
 

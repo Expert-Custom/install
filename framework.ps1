@@ -8,10 +8,12 @@ param()
 
 $Language = ''
 $Project = ''
+$Ai = ''
 foreach ($arg in $args) {
   switch ($arg) {
     { $_ -in '--ts', '--typescript' } { $Language = 'ts' }
     '--java' { $Language = 'java' }
+    '--ia' { $Ai = 'sim' }
     default { if (-not $arg.StartsWith('--') -and -not $Project) { $Project = $arg } }
   }
 }
@@ -128,6 +130,11 @@ if ($Language -eq 'java') {
   Set-NpmAccess
   if (-not $Project) { $Project = Read-Host 'Nome da pasta do projeto' }
   if (-not $Project) { Write-Host 'Informe o nome da pasta.'; return }
+  # A mesma pergunta que o create-app faz no TypeScript.
+  if (-not $Ai) {
+    $Ai = if ((Read-Host 'Ligar o assistente de IA (Aurora)? (s/N)') -match '^(s|sim)$') { 'sim' } else { 'nao' }
+  }
+  $aiOption = if ($Ai -eq 'sim') { '-Dia=true' } else { '-Dia=false' }
   $version = if ($env:EXPERT_VERSION) { $env:EXPERT_VERSION } else { Get-LatestVersion }
   Write-Host "Criando o projeto `"$Project`" com o framework Java $version..."
   # Ainda não existe projeto que diga ao Maven onde fica o plugin do framework. Este pom
@@ -151,7 +158,7 @@ if ($Language -eq 'java') {
 "@
   Set-Content -Path (Join-Path $boot 'pom.xml') -Value $pom
   try {
-    mvn -q -f (Join-Path $boot 'pom.xml') "br.com.expertcustom.fw:expert-maven-plugin:$version`:create" "-Dname=$Project"
+    mvn -q -f (Join-Path $boot 'pom.xml') "br.com.expertcustom.fw:expert-maven-plugin:$version`:create" "-Dname=$Project" $aiOption
   } finally {
     Remove-Item -Recurse -Force $boot
   }

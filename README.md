@@ -26,7 +26,8 @@ curl -fsSL https://raw.githubusercontent.com/Expert-Custom/install/main/framewor
 - **TypeScript:** precisa do Node 24+. Configura o `~/.npmrc` e roda o `create-app`.
 - **Java:** precisa do Java 25+, do Maven e do Node 24+ (as telas são em React). Configura o
   `~/.m2/settings.xml` (servidor `expertcustom`) e o `~/.npmrc`, e cria o projeto com o
-  `expert:create` (backend em Java, telas em React).
+  `expert:create` (backend em Java, telas em React). Pergunta se liga o assistente de IA (Aurora), como o
+  `create-app` faz no TypeScript; `--ia` já responde que sim.
 
 O instalador pede só o token de acesso do GitHub (com permissão de leitura nos pacotes,
 `read:packages`), nas duas linguagens. O usuário do GitHub, que o Maven exige, ele descobre pelo
