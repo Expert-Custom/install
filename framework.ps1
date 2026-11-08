@@ -22,7 +22,38 @@ $CreateApp = if ($env:EXPERT_CREATE_APP) { $env:EXPERT_CREATE_APP } else { '@exp
 $Token = ''
 $Username = ''
 
+# Só o token é perguntado. O usuário do GitHub, que o Maven exige, sai do próprio token.
+$Npmrc = Join-Path $HOME '.npmrc'
+$Settings = Join-Path (Join-Path $HOME '.m2') 'settings.xml'
+
+# O token salvo no ~/.npmrc por uma instalação anterior.
+function Get-SavedNpmToken {
+  if (-not (Test-Path $Npmrc)) { return '' }
+  $line = Select-String -Path $Npmrc -Pattern "^//$NpmRegistry/:_authToken=(.+)$" | Select-Object -First 1
+  if ($line) { return $line.Matches[0].Groups[1].Value }
+  return ''
+}
+
+# O usuário ou o token (username|password) do servidor expertcustom no ~/.m2/settings.xml.
+function Get-SavedMaven($tag) {
+  if (-not (Test-Path $Settings)) { return '' }
+  $text = Get-Content -Raw $Settings
+  if ($text -match "(?s)<id>expertcustom</id>.*?<$tag>(.*?)</$tag>") { return $Matches[1] }
+  return ''
+}
+
+# O login do dono do token, perguntado ao GitHub.
+function Get-GitHubLogin {
+  try {
+    $user = Invoke-RestMethod -Uri 'https://api.github.com/user' -Headers @{ Authorization = "Bearer $script:Token"; 'User-Agent' = 'expertcustom-install' }
+    return $user.login
+  } catch { return '' }
+}
+
+# O token: o já salvo ou, na primeira vez, perguntado.
 function Read-Token {
+  if ($script:Token) { return }
+  $script:Token = Get-SavedNpmToken
   if ($script:Token) { return }
   $secure = Read-Host 'Token de acesso da ExpertCustom' -AsSecureString
   $script:Token = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
@@ -30,7 +61,7 @@ function Read-Token {
 }
 
 function Set-NpmAccess {
-  $npmrc = Join-Path $HOME '.npmrc'
+  $npmrc = $Npmrc
   if ((Test-Path $npmrc) -and (Select-String -Path $npmrc -Pattern "//$NpmRegistry/:_authToken=" -SimpleMatch -Quiet)) { return }
   Read-Token
   $lines = @()
@@ -46,11 +77,16 @@ function Set-NpmAccess {
 }
 
 function Set-MavenAccess {
-  $settings = Join-Path (Join-Path $HOME '.m2') 'settings.xml'
-  if ((Test-Path $settings) -and (Select-String -Path $settings -Pattern '<id>expertcustom</id>' -SimpleMatch -Quiet)) { return }
-  $script:Username = Read-Host 'Usuário do GitHub'
+  $settings = $Settings
+  if ((Test-Path $settings) -and (Select-String -Path $settings -Pattern '<id>expertcustom</id>' -SimpleMatch -Quiet)) {
+    # Já configurado: usa o que está lá (a versão mais nova é lida com ele).
+    $script:Username = Get-SavedMaven 'username'
+    $script:Token = Get-SavedMaven 'password'
+    return
+  }
   Read-Token
-  if (-not $script:Username) { Write-Host 'Informe o usuário do GitHub.'; exit 1 }
+  $script:Username = Get-GitHubLogin
+  if (-not $script:Username) { Write-Host 'O GitHub não aceitou o token. Confira se ele está certo e tem a permissão read:packages.'; exit 1 }
   $server = "    <server>`n      <id>expertcustom</id>`n      <username>$script:Username</username>`n      <password>$script:Token</password>`n    </server>"
   New-Item -ItemType Directory -Force -Path (Split-Path $settings) | Out-Null
   if (-not (Test-Path $settings)) {

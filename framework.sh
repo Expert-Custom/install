@@ -46,14 +46,44 @@ if [ -z "$LANGUAGE" ]; then
 fi
 
 # ---- acesso aos pacotes privados (o mesmo token do GitHub serve para npm e Maven) --------
+# Só o token é perguntado. O usuário do GitHub, que o Maven exige, sai do próprio token.
+
+NPMRC="$HOME/.npmrc"
+SETTINGS="$HOME/.m2/settings.xml"
+
+# O token salvo no ~/.npmrc por uma instalação anterior.
+saved_npm_token() {
+  if [ -f "$NPMRC" ]; then
+    sed -n "s|^//$NPM_REGISTRY/:_authToken=||p" "$NPMRC" | head -1
+  fi
+}
+
+# O usuário ou o token (username|password) do servidor expertcustom no ~/.m2/settings.xml.
+saved_maven() {
+  if [ -f "$SETTINGS" ]; then
+    awk -v tag="$1" '/<id>expertcustom<\/id>/ { found = 1 }
+      found && index($0, "<" tag ">") { sub(".*<" tag ">", ""); sub("</" tag ">.*", ""); print; exit }' "$SETTINGS"
+  fi
+}
+
+# O token: o já salvo ou, na primeira vez, perguntado.
+get_token() {
+  if [ -z "$TOKEN" ]; then TOKEN=$(saved_npm_token); fi
+  if [ -z "$TOKEN" ]; then TOKEN=$(ask_hidden "Token de acesso da ExpertCustom: "); fi
+  if [ -z "$TOKEN" ]; then echo "Sem o token não dá para baixar o framework." >&2; exit 1; fi
+}
+
+# O login do dono do token, perguntado ao GitHub.
+github_login() {
+  curl -fsSL -H "Authorization: Bearer $TOKEN" https://api.github.com/user 2>/dev/null \
+    | tr ',' '\n' | sed -n 's/.*"login": *"\([^"]*\)".*/\1/p' | head -1
+}
 
 configure_npm() {
-  NPMRC="$HOME/.npmrc"
   if [ -f "$NPMRC" ] && grep -q "//$NPM_REGISTRY/:_authToken=" "$NPMRC"; then
     return
   fi
-  [ -z "$TOKEN" ] && TOKEN=$(ask_hidden "Token de acesso da ExpertCustom: ")
-  if [ -z "$TOKEN" ]; then echo "Sem o token não dá para baixar o framework." >&2; exit 1; fi
+  get_token
   touch "$NPMRC"
   grep -v "@expert-custom:registry=" "$NPMRC" | grep -v "//$NPM_REGISTRY/:_authToken=" > "$NPMRC.tmp" || true
   echo "@expert-custom:registry=https://$NPM_REGISTRY" >> "$NPMRC.tmp"
@@ -64,13 +94,17 @@ configure_npm() {
 }
 
 configure_maven() {
-  SETTINGS="$HOME/.m2/settings.xml"
   if [ -f "$SETTINGS" ] && grep -q "<id>expertcustom</id>" "$SETTINGS"; then
+    # Já configurado: usa o que está lá (a versão mais nova é lida com ele).
+    USERNAME=$(saved_maven username)
+    TOKEN=$(saved_maven password)
     return
   fi
-  USERNAME=$(ask "Usuário do GitHub: ")
-  [ -z "$TOKEN" ] && TOKEN=$(ask_hidden "Token de acesso da ExpertCustom: ")
-  if [ -z "$USERNAME" ] || [ -z "$TOKEN" ]; then echo "Sem usuário e token não dá para baixar o framework." >&2; exit 1; fi
+  get_token
+  USERNAME=$(github_login)
+  if [ -z "$USERNAME" ]; then
+    echo "O GitHub não aceitou o token. Confira se ele está certo e tem a permissão read:packages." >&2; exit 1
+  fi
   mkdir -p "$HOME/.m2"
   SERVER="    <server>\n      <id>expertcustom</id>\n      <username>$USERNAME</username>\n      <password>$TOKEN</password>\n    </server>"
   if [ ! -f "$SETTINGS" ]; then
@@ -114,7 +148,7 @@ if [ "$LANGUAGE" = "java" ]; then
   [ -z "$PROJECT" ] && PROJECT=$(ask "Nome da pasta do projeto: ")
   if [ -z "$PROJECT" ]; then echo "Informe o nome da pasta." >&2; exit 1; fi
   VERSION="${EXPERT_VERSION:-$(latest_version)}"
-  if [ -z "$VERSION" ]; then echo "Não consegui descobrir a versão do framework. Confira o token." >&2; exit 1; fi
+  if [ -z "$VERSION" ]; then echo "Não consegui ler o framework no GitHub. Confira se o token tem a permissão read:packages." >&2; exit 1; fi
   echo "Criando o projeto \"$PROJECT\" com o framework Java $VERSION..."
   mvn -q "br.com.expertcustom.fw:expert-maven-plugin:$VERSION:create" -Dname="$PROJECT"
   exit 0

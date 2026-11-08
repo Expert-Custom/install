@@ -28,5 +28,6 @@ curl -fsSL https://raw.githubusercontent.com/Expert-Custom/install/main/framewor
   `~/.m2/settings.xml` (servidor `expertcustom`) e o `~/.npmrc`, e cria o projeto com o
   `expert:create` (backend em Java, telas em React).
 
-O token de acesso é o mesmo do GitHub (com permissão de leitura nos pacotes). No Java, o instalador
-também pede o usuário do GitHub.
+O instalador pede só o token de acesso do GitHub (com permissão de leitura nos pacotes,
+`read:packages`), nas duas linguagens. O usuário do GitHub, que o Maven exige, ele descobre pelo
+próprio token. Da segunda vez em diante não pergunta nada: usa o que ficou salvo.
